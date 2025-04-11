@@ -12,7 +12,9 @@
 #include <cryptopp/md5.h>
 #include <memory>
 
-#define buff_size 1024
+#define buff_size 4096
+
+std::string client_ID = "000001";
 
 bool reg_user(int sock,std::string user_login,std::string user_pass){
     try{
@@ -47,7 +49,7 @@ bool send_file(int sock,std::string filepath) {
         }
 
         // Получаем размер файла
-        size_t file_size = file.tellg();
+        int file_size = file.tellg();
         file.seekg(0);
 
         // Извлекаем имя файла из пути
@@ -57,33 +59,33 @@ bool send_file(int sock,std::string filepath) {
                             : filepath.substr(last_slash + 1);
 
         // Отправляем имя файла
+        std::cout << filename << std::endl;
         int rc = send(sock, filename.c_str(), filename.length(), 0);
         if (rc <= 0) {
             file.close();
             throw std::runtime_error("Failed to send filename");
         }
-        std::cout << "Имя отправлено" << std::endl;
-
+        
+		rc = recv(sock,buff.get(),2,0);
+		if(rc != 2){
+			std::cout << "Not ok received"<<std::endl;
+			return 1;
+		}
+		std::cout << "Имя отправлено" << std::endl;
         // Отправляем размер файла
-        rc = send(sock, &file_size, sizeof(file_size), 0);
+        rc = send(sock, std::to_string(file_size).c_str(), std::to_string(file_size).length(), 0);
         if (rc <= 0) {
             file.close();
             throw std::runtime_error("Failed to send file size");
         }
-
-        // Читаем и отправляем файл по частям
-        size_t total_sent = 0;
-        while (total_sent < file_size) {
-            file.read(buff.get(), buff_size);
-            size_t bytes_read = file.gcount();
-            
-            rc = send(sock, buff.get(), bytes_read, 0);
-            if (rc <= 0) {
-                file.close();
-                throw std::runtime_error("File transfer interrupted");
-            }
-            total_sent += rc;
-        }
+		rc = recv(sock,buff.get(),2,0);
+		if(rc != 2){
+			std::cout << "Not ok received"<<std::endl;
+			return 1;
+		}
+        
+        file.read(buff.get(), buff_size);
+        rc=send(sock,buff.get(),file_size,0);
 
         file.close();
         return true;
@@ -168,12 +170,14 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "Connected to the server at " << SERVER_IP << ":" << PORT << "\n";
-	std::string message;
+	std::string message,user_ID;
+	std::cout << "Введите пользовательский идентификатор для подключения к серверу:" <<std::endl;
+	std::cin >> user_ID;
     // Отправка данных на сервер
     if(reg){
-    	message = "2100";
-    }else{message="1100";}
-    
+    	message = "2";
+    }else{message="1";}
+    message = message + client_ID + user_ID;
     if (::send(clientSocket, message.c_str(), message.length(), 0) < 0) {
         std::cerr << "Error: Failed to send data\n";
         close(clientSocket);
@@ -185,24 +189,26 @@ int main(int argc, char** argv) {
     // Получение данных от сервера
     std::unique_ptr<char[]> buffer(new char[1024]);
     ssize_t bytesReceived = recv(clientSocket, buffer.get(), 16, 0); //16 байт для SALT
-    if (bytesReceived < 0) {
-        std::cerr << "Error: Failed to receive data\n";
+    if (bytesReceived != 16) {
+        std::cerr << "Error: Failed to salt\n";
         close(clientSocket);
         return 1;
     }
 
     std::cout << "Received SALT from server: " << buffer.get() << "\n";
 	std::string SALT(buffer.get(),16);
-	std::string pass="ibst";
+	std::string pass;
+	std::cout <<"Введите пароль:"<<std::endl;
+	std::cin >> pass;
 	std::string password_hash = md5(SALT + pass);
 	//Отправка SALT серверу
-	if (::send(clientSocket, password_hash.c_str(),32, 0) < 0) {
-        std::cerr << "Error: Failed to send data\n";
+	if (::send(clientSocket, password_hash.c_str(),32, 0) <= 0) {
+        std::cerr << "Error: Failed to send SALT\n";
         close(clientSocket);
         return 1;
     }
-	bytesReceived = recv(clientSocket, buffer.get(), 2, 0); //2 байта для OK
-    if (bytesReceived < 0) {
+	bytesReceived = recv(clientSocket, buffer.get(), buff_size, 0); 
+    if (bytesReceived != 2) {
         std::cerr << "Error: OK not received\n";
         close(clientSocket);
         return 1;
