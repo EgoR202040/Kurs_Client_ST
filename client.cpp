@@ -86,7 +86,7 @@ bool send_file(int sock,std::string filepath) {
         
         file.read(buff.get(), buff_size);
         rc=send(sock,buff.get(),file_size,0);
-
+        std::cout << "Файл отправлен" <<std::endl;
         file.close();
         return true;
     } catch (const std::exception& e) {
@@ -208,14 +208,9 @@ int main(int argc, char** argv) {
         return 1;
     }
 	bytesReceived = recv(clientSocket, buffer.get(), buff_size, 0); 
-    if (bytesReceived != 2) {
-        std::cerr << "Error: OK not received\n";
-        close(clientSocket);
-        return 1;
-    }
-    std::string ok(buffer.get(),2);
-    if(ok != "OK"){
-    	std::cerr << "Not OK received" << std::endl;
+    std::string ok(buffer.get(),bytesReceived);
+    if(ok != "OK" or ok=="OKOK"){
+        std::cerr << ok << std::endl;
     	close(clientSocket);
     	exit(1);
     }
