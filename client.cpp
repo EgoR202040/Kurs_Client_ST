@@ -120,17 +120,17 @@ int main(int argc, char** argv) {
     int PORT = 33333;
     const char* SERVER_IP = "127.0.0.1";
 
-    // Настройка опций командной строки (без изменений)
+    // Настройка опций командной строки
     po::options_description opts("Allowed options");
     opts.add_options()
     ("help,h", "Show help")
-    ("port,p", po::value<int>(&PORT)->default_value(33333), "option is int(port for client)")
-    ("reg,r", po::bool_switch(&reg), "option is bool(mode for register user)")
-    ("send,s", po::bool_switch(&send), "option is bool(mode for send file)");
+    ("port,p", po::value<int>(&PORT)->default_value(33333), "option is int(port for client)") //Порт сервера
+    ("reg,r", po::bool_switch(&reg), "option is bool(mode for register user)") // Переключатель для разной логики работы клиента
+    ("send,s", po::bool_switch(&send), "option is bool(mode for send file)");// Переключатель для разной логики работы клиента
 
     po::variables_map vm;
     try {
-        po::store(po::parse_command_line(argc, argv, opts), vm);
+        po::store(po::parse_command_line(argc, argv, opts), vm); //Парсинг ПКС(параметров командной строки)
         po::notify(vm);
     } catch (const po::error& e) {
         std::cerr << "Error: " << e.what() << "\n";
@@ -143,18 +143,18 @@ int main(int argc, char** argv) {
     }
 
     if(reg == false && send == false){
-        std::cerr << "Необходимо выбрать 1 из параметров send,reg" << std::endl;
+        std::cerr << "Необходимо выбрать 1 из параметров send,reg" << std::endl; //обработка ошибок выбора переключатель
         return 1;
     }
     if (reg && send) {
-        std::cerr << "Необходимо выбрать 1 из параметров send,reg" << std::endl;
+        std::cerr << "Необходимо выбрать 1 из параметров send,reg" << std::endl;//обработка ошибок выбора переключатель
         return 1;
     }
 
     // Создание сокета
     int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (clientSocket < 0) {
-        std::cerr << "Error: Could not create socket\n";
+        std::cerr << "Error: Could not create socket\n"; // Обработка создания сокета клиентского приложения
         return 1;
     }
 
@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
 
     // Подключение к серверу
     if (connect(clientSocket, reinterpret_cast<struct sockaddr*>(&serverAddress), sizeof(serverAddress)) < 0) {
-        std::cerr << "Error: Connection failed\n";
+        std::cerr << "Error: Connection failed\n"; // Обработка сетевой ошибки соединения
         close(clientSocket);
         return 1;
     }
@@ -185,7 +185,7 @@ int main(int argc, char** argv) {
     // Формирование и отправка начального сообщения
     std::string message = (reg ? "2" : "1") + client_ID + user_ID;
     if (::send(clientSocket, message.c_str(), message.length(), 0) < 0) {
-        std::cerr << "Error: Failed to send data\n";
+        std::cerr << "Error: Failed to send data\n"; // Обработка сетевой ошибки отправки "Приветственного сообщения"
         close(clientSocket);
         return 1;
     }
@@ -194,7 +194,7 @@ int main(int argc, char** argv) {
     std::unique_ptr<char[]> buffer(new char[buff_size]);
     ssize_t bytesReceived = recv(clientSocket, buffer.get(), 16, 0);
     if (bytesReceived != 16) {
-        std::cerr << "Error: Failed to receive salt\n";
+        std::cerr << "Error: Failed to receive salt\n"; // Ошибка получения соли от сервера
         close(clientSocket);
         return 1;
     }
@@ -209,7 +209,7 @@ int main(int argc, char** argv) {
     // Вычисление и отправка хеша
     std::string password_hash = md5(salt + pass);
     if (::send(clientSocket, password_hash.c_str(), 32, 0) <= 0) {
-        std::cerr << "Error: Failed to send password hash\n";
+        std::cerr << "Error: Failed to send password hash\n"; // Ошибка при разрыв соединения с сервером
         close(clientSocket);
         return 1;
     }
@@ -217,14 +217,14 @@ int main(int argc, char** argv) {
     // Получение подтверждения аутентификации
     bytesReceived = recv(clientSocket, buffer.get(), buff_size, 0); 
     if (bytesReceived <= 0) {
-        std::cerr << "Error: Authentication failed\n";
+        std::cerr << "Error: Authentication failed\n"; // Неверный пароль
         close(clientSocket);
         return 1;
     }
 
     std::string auth_response(buffer.get(), bytesReceived);
     if (auth_response != "OK") {
-        std::cerr << "Privileges error: " << auth_response << std::endl;
+        std::cerr << "Privileges error: " << auth_response << std::endl; //Нехватка привилегий при попытке регистрации пользователя от имени user
         close(clientSocket);
         return 1;
     }
