@@ -27,8 +27,12 @@ bool reg_user(int sock, std::string user_login, std::string user_pass) {
 
         // Получение ответа от сервера
         int rc = recv(sock, buff.get(), 2, 0);
-        if (rc != 2 || std::string(buff.get(), 2) != "OK") {
-            throw std::runtime_error("Ошибка регистрации на сервере");
+        if(rc <= 0){
+        	throw std::runtime_error("Ошибка получения подтверждения регистрации");
+        }
+        std::cout << buff.get() << std::endl;
+        if(rc > 2){
+            std::cout << "Пользователь зарегистрирован с логином: " << std::string(buff.get(),rc).substr(2,rc) << std::endl;
         }
 
         std::cout << "Регистрация прошла успешно" << std::endl;
